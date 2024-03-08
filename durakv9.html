@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Durak Helper</title>
+    <style>
+        .card, .card-opponent {
+            padding: 5px;
+            border: 2px solid #000;
+            width: 50px;
+            text-align: center;
+            cursor: pointer;
+            margin: 2px;
+            background-color: white;
+        }
+        .selected-card {
+            background-color: #00d9fa;
+        }
+        .suit-container, #opponent-cards, #player-cards, #deck-info {
+            display: flex;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .card-opponent {
+            cursor: default;
+        }
+        .trump-indicator {
+            margin-left: 10px;
+            cursor: pointer;
+        }
+        .price {
+            font-size: 0.8em;
+            display: block;
+        }
+        .impact-indicator {
+            font-size: 1em;
+            margin-left: 5px;
+        }
+        .impact-positive {
+            color: green;
+        }
+        .impact-negative {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Помощник по игре Дурак</h1>
+    <div id="deck"></div>
+    <div id="deck-info"></div>
+    <div id="selected-cards">Выбранные карты: </div>
+    <button onclick="moveSelectedCards('self')">К себе</button>
+    <button onclick="moveSelectedCards('opponent')">К сопернику</button>
+    <button onclick="moveSelectedCards('discard')">В отбой</button>
+    <button onclick="moveAllOtherCardsToOpponent()">Остальное к сопернику</button>
+    <button onclick="resetGame()">Новая игра</button>
+    <button onclick="initializeDeck(24)">24</button> <!-- Кнопка для переключения режима на 24 карты -->
+    <div id="opponent-cards"></div>
+    <div id="player-cards"></div>
+
+    <script>
+        let deck = [];
+        let trumpSuit = null;
+        let ranks = ['6', '7', '8', '9', '10', 'J', 'Q', 'К', 'A'];
+        const suits = ['♥', '♦', '♣', '♠'];
+        const prices = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+        const trumpPrices = [10, 11, 12, 13, 14, 15, 16, 17, 18];
+    
+        class Card {
+            constructor(rank, suit, color, price, trumpPrice) {
+                this.rank = rank;
+                this.suit = suit;
+                this.color = color;
+                this.hidden = false;
+                this.selected = false;
+                this.location = "deck";
+                this.isTrump = false;
+                this.price = price;
+                this.trumpPrice = trumpPrice;
+            }
+    
+            getCurrentPrice() {
+                return this.isTrump ? this.trumpPrice : this.price;
+            }
+        }
+    
+        function calculateAveragePrice(cards) {
+            if (cards.length === 0) return 0;
+            const totalPrice = cards.reduce((sum, card) => sum + card.getCurrentPrice(), 0);
+            return totalPrice / cards.length;
+        }
+    
+        function calculateImpactOnAveragePrice(card, currentAveragePrice) {
+            // Эта функция возвращала бы результат в зависимости от контекста, который не полностью ясен.
+            // Поэтому возвращаем false для упрощения.
+            return false;
+        }
+    
+        function initializeDeck(mode) {
+            deck = [];
+            ranks = mode === 24 ? ['9', '10', 'J', 'Q', 'К', 'A'] : ['6', '7', '8', '9', '10', 'J', 'Q', 'К', 'A'];
+            suits.forEach(suit => {
+                ranks.forEach((rank, index) => {
+                    let color = '';
+                    switch (suit) {
+                        case '♣': color = 'green'; break;
+                        case '♦': color = 'blue'; break;
+                        case '♠': color = 'black'; break;
+                        case '♥': color = 'red'; break;
+                    }
+                    const priceIndex = mode === 24 ? index + 3 : index;
+                    deck.push(new Card(rank, suit, color, prices[priceIndex], trumpPrices[priceIndex]));
+                });
+            });
+            displayCards();
+            currentMode = mode;
+        }
+    
+
+
+        function displayDeckInfo() {
+            const deckInfoElement = document.getElementById('deck-info');
+            const remainingCards = deck.filter(card => card.location === "deck");
+            deckInfoElement.textContent = `Средняя цена карт в колоде: ${calculateAveragePrice(remainingCards)}`;
+        }
+
+        function updateAveragePrices() {
+            displayOpponentCards();
+            displayPlayerCards();
+            displayDeckInfo();
+        }
+
+        function displayCards() {
+            const deckElement = document.getElementById('deck');
+            deckElement.innerHTML = '';
+            const currentAveragePrice = calculateAveragePrice(deck.filter(card => card.location === "deck"));
+
+            suits.forEach(suit => {
+                let suitContainer = document.createElement('div');
+                suitContainer.classList.add('suit-container');
+
+                deck.filter(card => card.suit === suit).forEach(card => {
+                    let cardElement = document.createElement('div');
+                    cardElement.className = card.selected ? 'card selected selected-card' : 'card';
+                    if (card.location === 'self' || card.location === 'opponent') {
+                        cardElement.style.backgroundColor = card.selected ? 'yellow' : (card.location === 'self' ? '#f5deb3' : '#d8bfd8');
+                    } else {
+                        cardElement.style.backgroundColor = 'white';
+                    }
+                    cardElement.style.color = card.color;
+                    cardElement.textContent = card.rank + card.suit;
+                    
+                    let priceElement = document.createElement('span');
+                    priceElement.className = 'price';
+                    priceElement.textContent = `Цена: ${card.getCurrentPrice()}`;
+                    cardElement.appendChild(priceElement);
+
+                    let impactIndicator = document.createElement('span');
+                    impactIndicator.className = 'impact-indicator';
+                    impactIndicator.innerHTML = calculateImpactOnAveragePrice(card, currentAveragePrice) ? '&#10004;' : '&#10060;';
+                    priceElement.appendChild(impactIndicator);
+
+                    if (card.isTrump) {
+                        cardElement.style.borderColor = 'gold';
+                    }
+                    if (card.location === "discard") {
+                        cardElement.textContent = 'X';
+                        cardElement.style.textDecoration = 'line-through';
+                    } else if (card.hidden) {
+                        cardElement.textContent = 'Скрыто';
+                    }
+
+                    cardElement.addEventListener('click', function() {
+                    card.selected = !card.selected;
+                    cardElement.classList.toggle('selected');
+                     // Обновляем стиль фона для выделения карты
+                     cardElement.style.backgroundColor = card.selected ? '#ffffcc' : 'white';
+                     updateSelectedLabel();
+                    });
+
+
+                    suitContainer.appendChild(cardElement);
+                });
+
+                let checkBox = document.createElement('input');
+                checkBox.type = 'checkbox';
+                checkBox.classList.add('trump-indicator');
+                checkBox.checked = trumpSuit === suit;
+                checkBox.onchange = function() {
+                    if (checkBox.checked) {
+                        if (trumpSuit !== null) {
+                            deck.forEach(card => { if (card.suit === trumpSuit) card.isTrump = false; });
+                        }
+                        trumpSuit = suit;
+                        deck.forEach(card => { if (card.suit === trumpSuit) card.isTrump = true; });
+                    } else {
+                        trumpSuit = null;
+                        deck.forEach(card => { card.isTrump = false; });
+                    }
+                    displayCards();
+                };
+                suitContainer.appendChild(checkBox);
+
+                deckElement.appendChild(suitContainer);
+            });
+            updateAveragePrices();
+        }
+
+        function moveSelectedCards(target) {
+            let selectedCards = deck.filter(card => card.selected);
+
+            selectedCards.forEach(card => {
+                card.location = target;
+                card.selected = false;
+                if (target === 'discard') {
+                    card.hidden = true;
+                }
+            });
+
+            // Добавляем или удаляем класс .selected-card в зависимости от цели
+            if (target !== 'self') {
+                selectedCards.forEach(card => {
+                    let cardElement = document.querySelector(`.card.selected[data-rank="${card.rank}"][data-suit="${card.suit}"]`);
+                    cardElement.classList.toggle('selected-card');
+                });
+            }
+
+            displayCards();
+            updateSelectedLabel();
+        }
+
+        function moveAllOtherCardsToOpponent() {
+            let otherCards = deck.filter(card => card.location !== 'self' && card.location !== 'discard');
+            
+            otherCards.forEach(card => {
+                card.location = 'opponent';
+            });
+
+            // Удаляем класс .selected-card у всех карт
+            document.querySelectorAll('.card.selected-card').forEach(cardElement => {
+                cardElement.classList.remove('selected-card');
+            });
+
+            displayCards();
+        }
+
+        function displayOpponentCards() {
+            const opponentCardsElement = document.getElementById('opponent-cards');
+            opponentCardsElement.innerHTML = 'Карты соперника: ';
+            const currentAveragePrice = calculateAveragePrice(deck.filter(card => card.location === "deck" || card.location === "opponent"));
+
+            let opponentCards = deck.filter(card => card.location === "opponent");
+            opponentCards.forEach(card => {
+                let cardElement = document.createElement('div');
+                cardElement.className = "card-opponent";
+                cardElement.style.color = card.color;
+                cardElement.textContent = `${card.rank}${card.suit}`;
+                opponentCardsElement.appendChild(cardElement);
+            });
+
+            let averagePriceText = document.createElement('span');
+            averagePriceText.textContent = ` (Средняя цена: ${calculateAveragePrice(opponentCards)})`;
+            opponentCardsElement.appendChild(averagePriceText);
+        }
+
+        function displayPlayerCards() {
+            const playerCardsElement = document.getElementById('player-cards');
+            playerCardsElement.innerHTML = 'Мои карты: ';
+            const currentAveragePrice = calculateAveragePrice(deck.filter(card => card.location === "deck" || card.location === "self"));
+
+            let playerCards = deck.filter(card => card.location === "self");
+            playerCards.forEach(card => {
+                let cardElement = document.createElement('div');
+                cardElement.className = "card";
+                cardElement.style.color = card.color;
+                cardElement.textContent = `${card.rank}${card.suit}`;
+                playerCardsElement.appendChild(cardElement);
+            });
+
+            let averagePriceText = document.createElement('span');
+            averagePriceText.textContent = ` (Средняя цена: ${calculateAveragePrice(playerCards)})`;
+            playerCardsElement.appendChild(averagePriceText);
+        }
+
+        function updateSelectedLabel() {
+            const selectedCardsElement = document.getElementById('selected-cards');
+            selectedCardsElement.innerHTML = 'Выбранные карты: ';
+            deck.filter(card => card.selected).forEach(card => {
+                selectedCardsElement.innerHTML += `${card.rank}${card.suit} `;
+            });
+        }
+        let currentMode = 36; // Начальный режим 36 карт
+
+function resetGame() {
+    // Сбросить колоду
+    deck = [];
+    trumpSuit = null;
+    initializeDeck(currentMode); // Инициализировать колоду с текущим режимом
+
+    // Очистить выбранные карты
+    deck.forEach(card => card.selected = false);
+    updateSelectedLabel();
+
+    // Очистить расположение карт
+    deck.forEach(card => card.location = "deck");
+    deck.forEach(card => card.hidden = false);
+
+    // Обновить отображение карт
+    displayCards();
+    updateAveragePrices();
+}
+        displayCards();
+        initializeDeck(36);
+    </script>
+</body>
+</html>
